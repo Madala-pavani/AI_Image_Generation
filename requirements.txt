@@ -1,5 +1,6 @@
-setuptools>=67.6.0
+setuptools>=68.0.0
 wheel
+pip>=25.1
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.2.0+cpu
 torchvision==0.17.1+cpu
