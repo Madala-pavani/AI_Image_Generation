@@ -13,6 +13,16 @@ print("GPU Available:", torch.cuda.is_available())
 from google.colab import drive
 drive.mount('/content/drive')
 
+import torch
+import torchvision
+import matplotlib
+import numpy
+
+print(torch.__version__)
+print(torchvision.__version__)
+print(matplotlib.__version__)
+print(numpy.__version__)
+
 import os
 import torch
 import numpy as np
@@ -22,8 +32,9 @@ from torch.utils.data import DataLoader, Dataset
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-
-import zipfile, os, shutil
+import pickle as pkl
+from torchvision import datasets as dset
+import zipfile, shutil
 
 # Unzip dataset
 with zipfile.ZipFile('/content/drive/MyDrive/TEAM_C4/celebdataset_small.zip', 'r') as zip_ref:
@@ -41,20 +52,7 @@ for root, _, files in os.walk('/content/celeba_raw'):
             if not os.path.exists(dst_path):
                 shutil.move(src_path, dst_path)
 
-
-
-# Imports
-import pickle as pkl
-import matplotlib.pyplot as plt
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torchvision import datasets as dset
-from torchvision import transforms
-
-# Data loader
+# Data loader function
 def get_dataloader(batch_size, image_size, data_dir='/content/celeba'):
     dataset = dset.ImageFolder(root=data_dir,
                                transform=transforms.Compose([
@@ -68,28 +66,23 @@ batch_size = 16
 img_size = 128
 celeba_train_loader = get_dataloader(batch_size, img_size)
 
-# Show images
+# Function to display an image
 def imshow(img):
     npimg = img.numpy()
     plt.imshow(np.transpose(npimg, (1, 2, 0)))
 
 dataiter = iter(celeba_train_loader)
 images, _ = next(dataiter)
-fig = plt.figure(figsize=(20, 4))
-for idx in np.arange(16):
-    ax = fig.add_subplot(2, 8, idx + 1, xticks=[], yticks=[])
-    imshow(images[idx])
 
 # Scale function
 def scale(x, feature_range=(-1, 1)):
     return x * (feature_range[1] - feature_range[0]) + feature_range[0]
 
-img = images[0]
-scaled_img = scale(img)
+scaled_img = scale(images[0])
 print('Min:', scaled_img.min())
 print('Max:', scaled_img.max())
 
-# Discriminator
+# Define the Discriminator
 class Discriminator(nn.Module):
     def __init__(self, conv_dim):
         super(Discriminator, self).__init__()
@@ -97,7 +90,7 @@ class Discriminator(nn.Module):
         self.conv2 = nn.Conv2d(conv_dim, conv_dim * 2, 4, stride=2, padding=1)
         self.conv3 = nn.Conv2d(conv_dim * 2, conv_dim * 4, 4, stride=2, padding=1)
         self.conv4 = nn.Conv2d(conv_dim * 4, conv_dim * 8, 4, stride=2, padding=1)
-        self.final_feat_map_size = 128 // (2 ** 4)  # 8x8
+        self.final_feat_map_size = 128 // (2 ** 4)
         self.fc = nn.Linear(conv_dim * 8 * self.final_feat_map_size ** 2, 1)
 
     def forward(self, x):
@@ -108,17 +101,16 @@ class Discriminator(nn.Module):
         x = x.view(x.size(0), -1)
         return self.fc(x)
 
-# Generator
+# Define the Generator
 class Generator(nn.Module):
     def __init__(self, z_size, conv_dim):
         super(Generator, self).__init__()
         self.conv_dim = conv_dim
-        self.fc = nn.Linear(z_size, conv_dim * 8 * 8 * 8)  # Output shape: (batch, 512, 8, 8)
-
-        self.tconv1 = nn.ConvTranspose2d(conv_dim * 8, conv_dim * 4, 4, stride=2, padding=1)  # 16x16
-        self.tconv2 = nn.ConvTranspose2d(conv_dim * 4, conv_dim * 2, 4, stride=2, padding=1)  # 32x32
-        self.tconv3 = nn.ConvTranspose2d(conv_dim * 2, conv_dim, 4, stride=2, padding=1)      # 64x64
-        self.tconv4 = nn.ConvTranspose2d(conv_dim, 3, 4, stride=2, padding=1)                 # 128x128
+        self.fc = nn.Linear(z_size, conv_dim * 8 * 8 * 8)
+        self.tconv1 = nn.ConvTranspose2d(conv_dim * 8, conv_dim * 4, 4, stride=2, padding=1)
+        self.tconv2 = nn.ConvTranspose2d(conv_dim * 4, conv_dim * 2, 4, stride=2, padding=1)
+        self.tconv3 = nn.ConvTranspose2d(conv_dim * 2, conv_dim, 4, stride=2, padding=1)
+        self.tconv4 = nn.ConvTranspose2d(conv_dim, 3, 4, stride=2, padding=1)
 
     def forward(self, x):
         x = self.fc(x)
@@ -127,7 +119,6 @@ class Generator(nn.Module):
         x = F.relu(self.tconv2(x))
         x = F.relu(self.tconv3(x))
         return torch.tanh(self.tconv4(x))
-
 
 # Loss functions
 def real_loss(D_out):
@@ -154,7 +145,7 @@ d_optimizer = optim.Adam(D.parameters(), 0.0002, betas=(0.5, 0.999))
 g_optimizer = optim.Adam(G.parameters(), 0.0002, betas=(0.5, 0.999))
 
 # Training loop
-num_epochs = 1  # Increase this for better training
+num_epochs = 10
 fixed_z = torch.randn(16, z_size).to(device)
 
 for epoch in range(num_epochs):
@@ -191,13 +182,23 @@ for epoch in range(num_epochs):
 torch.save(G.state_dict(), 'generator.pth')
 torch.save(D.state_dict(), 'discriminator.pth')
 
-# Generate and show fake images
+# Generate and display images separately
 G.eval()
 with torch.no_grad():
     fake_images = G(fixed_z).cpu()
 
-plt.imshow(np.transpose(fake_images[0].numpy(), (1, 2, 0)))
-plt.axis('off')
+fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(6, 12))
+
+# Input image
+axes[0].imshow(np.transpose(images[0].numpy(), (1, 2, 0)))
+axes[0].set_title("Input Image")
+axes[0].axis('off')
+
+# Generated image
+axes[1].imshow(np.transpose(fake_images[0].numpy(), (1, 2, 0)))
+axes[1].set_title("Generated Image")
+axes[1].axis('off')
+
 plt.show()
 
 from google.colab import files
