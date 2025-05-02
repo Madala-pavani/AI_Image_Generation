@@ -1,6 +1,6 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.7.0+cu126
-torchvision==0.22.0+cu126
+torch==2.7.0+cpu
+torchvision==0.22.0+cpu
 numpy==2.0.2
 matplotlib==3.10.0
 streamlit==1.22.0
